@@ -1,0 +1,36 @@
+version: 0.2
+env:
+  variables:
+    JAVA_HOME: "/usr/lib/jvm/java-17-amazon-corretto/"
+phases:
+  install:
+        commands:
+            - apt-get update; apt-get install -y java-17-amazon-corretto-jdk
+            - update-alternatives --auto javac
+            - update-alternatives --auto java
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws --version
+      - $(aws ecr get-login --region $AWS_DEFAULT_REGION --no-include-email)
+      - TAG="$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | head -c 8)"
+      - IMAGE_URI=${REPOSITORY_URI}:${TAG}
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Building the Docker image...
+      - mvn clean package -Ddockerfile.skip
+      - docker build -t $IMAGE_URI .
+  post_build:
+    commands:
+      - printenv
+      - echo Build completed on `date`
+      - echo $IMAGE_URI
+      - echo $TAG
+      - echo Pushing the Docker images...
+      - docker push $IMAGE_URI 
+      - echo push completed
+      - echo Writing image definitions file...
+      - printf '[{"name":"%s","imageUri":"%s"}]' $CONTAINER_NAME $IMAGE_URI > imagedefinitions.json
+artifacts:
+    files: imagedefinitions.json
